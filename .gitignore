@@ -1,16 +1,26 @@
 build/
+build-*/
+out/
+.vs/
 .vscode/
 .idea/
+CMakeUserPresets.json
 
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
+CTestTestfile.cmake
+Testing/
 Makefile
 
 *.exe
 *.obj
 *.o
+*.lib
+*.a
 *.dll
 *.pdb
+*.ilk
 
+*.swp
 .DS_Store

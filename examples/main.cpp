@@ -1,47 +1,113 @@
+#include "ecs/ECS.h"
+
 #include <iostream>
 
-#include "ecs/EntityManager.h"
+struct Position
+{
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+struct Velocity
+{
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+struct Lifetime
+{
+    float remaining = 0.0f;
+};
+
+struct Name
+{
+    const char* value = "";
+};
+
+class MovementSystem final : public ecs::System
+{
+public:
+    void update(ecs::Registry& registry, float deltaTime) override
+    {
+        registry.view<Position, Velocity>().each(
+            [deltaTime](Position& position, const Velocity& velocity)
+            {
+                position.x += velocity.x * deltaTime;
+                position.y += velocity.y * deltaTime;
+            });
+    }
+};
+
+class LifetimeSystem final : public ecs::System
+{
+public:
+    void update(ecs::Registry& registry, float deltaTime) override
+    {
+        registry.view<Lifetime>().each(
+            [&registry, deltaTime](ecs::Entity entity, Lifetime& lifetime)
+            {
+                lifetime.remaining -= deltaTime;
+
+                if (lifetime.remaining <= 0.0f)
+                {
+                    registry.destroyEntity(entity);
+                }
+            });
+    }
+};
+
+static void printState(ecs::Registry& registry)
+{
+    registry.view<Name, Position>().each(
+        [](const Name& name, const Position& position)
+        {
+            std::cout << "  " << name.value
+                      << " -> (" << position.x << ", " << position.y << ")\n";
+        });
+
+    std::cout << "  alive entities: " << registry.entityCount() << "\n\n";
+}
 
 int main()
 {
-    ecs::EntityManager manager;
+    ecs::Registry registry;
 
-    std::cout << "MiniECS - Entity Management\n";
-    std::cout << "===========================\n\n";
+    const ecs::Entity player = registry.createEntity();
+    registry.emplace<Name>(player, "player");
+    registry.emplace<Position>(player, 0.0f, 0.0f);
+    registry.emplace<Velocity>(player, 10.0f, 5.0f);
 
-    // Crear dos entidades
-    ecs::Entity player = manager.create();
-    ecs::Entity enemy = manager.create();
+    const ecs::Entity bullet = registry.createEntity();
+    registry.emplace<Name>(bullet, "bullet");
+    registry.emplace<Position>(bullet, 0.0f, 0.0f);
+    registry.emplace<Velocity>(bullet, 50.0f, 0.0f);
+    registry.emplace<Lifetime>(bullet, 1.5f);
 
-    std::cout << "Player created\n";
-    std::cout << "  ID: " << player.id << '\n';
-    std::cout << "  Generation: " << player.generation << '\n';
-    std::cout << "  Alive: " << (manager.isAlive(player) ? "Yes" : "No") << "\n\n";
+    const ecs::Entity tree = registry.createEntity();
+    registry.emplace<Name>(tree, "tree");
+    registry.emplace<Position>(tree, 3.0f, 7.0f);
 
-    std::cout << "Enemy created\n";
-    std::cout << "  ID: " << enemy.id << '\n';
-    std::cout << "  Generation: " << enemy.generation << '\n';
-    std::cout << "  Alive: " << (manager.isAlive(enemy) ? "Yes" : "No") << "\n\n";
+    ecs::Scheduler scheduler;
+    scheduler.add<MovementSystem>();
+    scheduler.add<LifetimeSystem>();
 
-    // Destruir al enemigo
-    manager.destroy(enemy);
+    std::cout << "MiniECS Demo\n============\n\n";
+    std::cout << "t = 0s\n";
+    printState(registry);
 
-    std::cout << "Enemy destroyed\n";
-    std::cout << "  Alive: " << (manager.isAlive(enemy) ? "Yes" : "No") << "\n\n";
+    for (int second = 1; second <= 2; ++second)
+    {
+        scheduler.update(registry, 1.0f);
 
-    // Crear una nueva entidad
-    ecs::Entity newEnemy = manager.create();
+        std::cout << "t = " << second << "s\n";
+        printState(registry);
+    }
 
-    std::cout << "New enemy created\n";
-    std::cout << "  ID: " << newEnemy.id << '\n';
-    std::cout << "  Generation: " << newEnemy.generation << '\n';
-    std::cout << "  Alive: " << (manager.isAlive(newEnemy) ? "Yes" : "No") << "\n\n";
+    std::cout << "bullet alive? " << std::boolalpha << registry.isAlive(bullet) << "\n";
 
-    // Comprobar que la antigua entidad sigue siendo inválida
-    std::cout << "Old enemy reference\n";
-    std::cout << "  ID: " << enemy.id << '\n';
-    std::cout << "  Generation: " << enemy.generation << '\n';
-    std::cout << "  Alive: " << (manager.isAlive(enemy) ? "Yes" : "No") << '\n';
+    const ecs::Entity recycled = registry.createEntity();
+    std::cout << "recycled id " << recycled.id << " (gen " << recycled.generation << ")"
+              << " has Position? " << registry.has<Position>(recycled) << "\n";
 
     return 0;
 }
